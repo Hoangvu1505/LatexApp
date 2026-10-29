@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import archiver from 'archiver';
 import multer from 'multer';
+import AdmZip from 'adm-zip';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection, getYDoc } from 'y-websocket/bin/utils';
 import { fileURLToPath } from 'url';
@@ -44,6 +45,12 @@ const upload = multer({
       cb(null, file.originalname);
     }
   })
+});
+
+// Configure memory storage multer for project imports (.zip, .tex)
+const uploadImport = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }
 });
 
 // Memory cache for project chat messages: projectId -> Array<Message>
@@ -251,7 +258,106 @@ app.post('/api/projects', async (req, res) => {
   }
 });
 
-// 2.1 Delete a project entirely
+// 2.1 Import project from ZIP archive or single .tex file
+app.post('/api/projects/import', uploadImport.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded for import.' });
+    }
+
+    let owner = null;
+    if (req.body.owner) {
+      try {
+        owner = typeof req.body.owner === 'string' ? JSON.parse(req.body.owner) : req.body.owner;
+      } catch (e) {}
+    }
+
+    if (!owner || !owner.email || !owner.email.trim()) {
+      return res.status(401).json({ error: 'Vui lòng đăng nhập để nhập và lưu dự án.' });
+    }
+
+    const originalName = req.file.originalname;
+    const baseTitle = req.body.title?.trim() || path.parse(originalName).name || 'Imported Project';
+    const id = `proj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const projDir = path.join(PROJECTS_ROOT, id);
+
+    await fs.ensureDir(projDir);
+
+    if (originalName.toLowerCase().endsWith('.zip')) {
+      const zip = new AdmZip(req.file.buffer);
+      const zipEntries = zip.getEntries();
+
+      // Check for a common root folder in the archive (e.g., project-folder/main.tex)
+      let commonRoot = '';
+      const firstValid = zipEntries.find((e) => !e.isDirectory && !e.entryName.startsWith('__MACOSX/'));
+      if (firstValid) {
+        const slashIdx = firstValid.entryName.indexOf('/');
+        if (slashIdx > 0) {
+          const candidate = firstValid.entryName.substring(0, slashIdx + 1);
+          const allMatch = zipEntries.every(
+            (e) => e.entryName.startsWith(candidate) || e.entryName.startsWith('__MACOSX/')
+          );
+          if (allMatch) commonRoot = candidate;
+        }
+      }
+
+      for (const entry of zipEntries) {
+        if (entry.isDirectory || entry.entryName.startsWith('__MACOSX/')) continue;
+        let relativePath = entry.entryName;
+        if (commonRoot && relativePath.startsWith(commonRoot)) {
+          relativePath = relativePath.substring(commonRoot.length);
+        }
+        const safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+        if (!safePath || safePath.startsWith('.')) continue;
+
+        const targetPath = path.join(projDir, safePath);
+        await fs.ensureDir(path.dirname(targetPath));
+        await fs.writeFile(targetPath, entry.getData());
+      }
+
+      // Check main.tex presence
+      const files = await fs.readdir(projDir);
+      if (!files.includes('main.tex')) {
+        const anyTex = files.find((f) => f.toLowerCase().endsWith('.tex'));
+        if (anyTex) {
+          await fs.copy(path.join(projDir, anyTex), path.join(projDir, 'main.tex'));
+        } else {
+          await fs.writeFile(path.join(projDir, 'main.tex'), DEFAULT_MAIN_TEX, 'utf-8');
+        }
+      }
+    } else if (originalName.toLowerCase().endsWith('.tex')) {
+      const texContent = req.file.buffer.toString('utf-8');
+      await fs.writeFile(path.join(projDir, 'main.tex'), texContent, 'utf-8');
+      await fs.writeFile(path.join(projDir, 'README.md'), DEFAULT_README, 'utf-8');
+    } else {
+      return res.status(400).json({ error: 'Định dạng file không được hỗ trợ. Vui lòng chọn file .zip hoặc .tex.' });
+    }
+
+    const meta = {
+      id,
+      title: baseTitle,
+      template: 'imported',
+      owner: {
+        name: owner.name || owner.email.split('@')[0],
+        email: owner.email.trim().toLowerCase()
+      },
+      collaborators: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    await fs.writeJson(path.join(projDir, 'meta.json'), meta, { spaces: 2 });
+
+    // Pre-populate YDoc
+    ensureDocLoadedAndSynced(id, 'main.tex');
+
+    res.status(201).json({ success: true, project: meta });
+  } catch (err) {
+    console.error('Import Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2.2 Delete a project entirely
 app.delete('/api/projects/:id', async (req, res) => {
   try {
     const { id } = req.params;

@@ -27,6 +27,7 @@ export default function Dashboard({
   currentUser,
   onOpenProject,
   onNewProject,
+  onOpenImport,
   onDeleteProject,
   onOpenAuth,
   onLogout
@@ -241,12 +242,13 @@ export default function Dashboard({
             <button
               onClick={() => {
                 if (!currentUser && onOpenAuth) onOpenAuth();
-                else onNewProject();
+                else onOpenImport?.();
               }}
-              className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-xs font-medium px-3.5 py-1.5 rounded-full flex items-center space-x-1.5 transition shadow-sm"
+              className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-xs font-medium px-3.5 py-1.5 rounded-full flex items-center space-x-1.5 transition shadow-sm hover:border-indigo-500/40"
+              title="Import project from ZIP archive or .tex file"
             >
+              <Upload className="w-3.5 h-3.5 text-indigo-400" />
               <span>Import</span>
-              <ChevronDown className="w-3 h-3 text-gray-400" />
             </button>
 
             {/* + New Button */}

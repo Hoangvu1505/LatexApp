@@ -8,6 +8,7 @@ import ChatDrawer from './components/ChatDrawer.jsx';
 import ShareModal from './components/ShareModal.jsx';
 import ProjectModal from './components/ProjectModal.jsx';
 import AuthModal from './components/AuthModal.jsx';
+import ImportModal from './components/ImportModal.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import { COLLABORATOR_COLORS, getColorForEmail } from './utils/userColors.js';
 
@@ -32,6 +33,7 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   const [googleClientId, setGoogleClientId] = useState(null);
@@ -289,7 +291,41 @@ export default function App() {
     }
   };
 
-  // 5.1 Delete Project
+  // 5.1 Import Project (.zip or .tex)
+  const handleImportProject = async (file, title) => {
+    if (!currentUser?.email) {
+      setIsAuthOpen(true);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', title);
+    formData.append(
+      'owner',
+      JSON.stringify({
+        name: currentUser.name || currentUser.email.split('@')[0],
+        email: currentUser.email.trim().toLowerCase()
+      })
+    );
+
+    const res = await fetch('/api/projects/import', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to import project.');
+    }
+
+    const data = await res.json();
+    await fetchProjects();
+    setActiveProjectId(data.project.id);
+    setCurrentView('editor');
+  };
+
+  // 5.2 Delete Project
   const handleDeleteProject = async (id) => {
     try {
       const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
@@ -341,6 +377,13 @@ export default function App() {
               setIsAuthOpen(true);
             } else {
               setIsProjectModalOpen(true);
+            }
+          }}
+          onOpenImport={() => {
+            if (!currentUser) {
+              setIsAuthOpen(true);
+            } else {
+              setIsImportModalOpen(true);
             }
           }}
           onDeleteProject={handleDeleteProject}
@@ -445,6 +488,12 @@ export default function App() {
         isOpen={isProjectModalOpen}
         onClose={() => setIsProjectModalOpen(false)}
         onCreateProject={handleCreateProject}
+      />
+
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={handleImportProject}
       />
 
       <AuthModal
