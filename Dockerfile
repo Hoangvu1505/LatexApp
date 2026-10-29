@@ -1,5 +1,5 @@
 # Stage 1: Build Frontend
-FROM node:20-bullseye-slim AS builder
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app/client
 COPY client/package*.json ./
 RUN npm install
@@ -7,19 +7,18 @@ COPY client/ ./
 RUN npm run build
 
 # Stage 2: Production Server with Tectonic Engine
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
 WORKDIR /app
 
-# Install system libraries and Tectonic binary
+# Install curl, ca-certificates, tar, fontconfig, and official standalone Tectonic binary
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    tar \
     fontconfig \
-    libfontconfig1 \
-    libgraphite2-3 \
-    libharfbuzz0b \
-    && curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh \
-    && mv tectonic /usr/local/bin/ \
+    && curl -fsSL -L "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C /usr/local/bin \
+    && chmod +x /usr/local/bin/tectonic \
+    && tectonic --version \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy backend dependencies
@@ -41,4 +40,3 @@ ENV NODE_ENV=production
 EXPOSE 3001
 
 CMD ["node", "index.js"]
-
