@@ -1,0 +1,14 @@
+{
+  "name": "collaborative-latex-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install --production",
+    "start": "node server/index.js",
+    "server": "npm --prefix server run start",
+    "client": "npm --prefix client run dev",
+    "dev": "node start-dev.js"
+  }
+}
+
