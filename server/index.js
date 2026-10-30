@@ -788,4 +788,24 @@ server.listen(PORT, async () => {
   console.log(`📡 WebSocket Yjs endpoint: ws://localhost:${PORT}/ws/:roomName`);
   console.log(`📂 Projects folder: ${PROJECTS_ROOT}`);
   console.log(`=======================================================`);
+
+  // Asynchronously warm up Tectonic cache in background without blocking server boot
+  setTimeout(async () => {
+    try {
+      const warmupDir = path.join(PROJECTS_ROOT, '.warmup');
+      await fs.ensureDir(warmupDir);
+      const warmupTex = path.join(warmupDir, 'main.tex');
+      await fs.writeFile(
+        warmupTex,
+        '\\documentclass{article}\\usepackage{fontspec}\\usepackage[vietnamese]{babel}\\begin{document}Ready\\end{document}',
+        'utf-8'
+      );
+      console.log('[Compiler Warmup] Đang khởi động sẵn cache Tectonic trong nền...');
+      await compileLatex(warmupDir, 'main.tex');
+      await fs.remove(warmupDir);
+      console.log('[Compiler Warmup] Hoàn tất nạp sẵn cache Tectonic.');
+    } catch (e) {
+      console.log('[Compiler Warmup Notice]', e.message);
+    }
+  }, 4000);
 });

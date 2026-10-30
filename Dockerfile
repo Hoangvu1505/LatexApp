@@ -21,12 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && tectonic --version \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Pre-warm Tectonic font & package cache during build (makes runtime compile 5x-10x faster on Render)
-RUN mkdir -p /tmp/prewarm && cd /tmp/prewarm && \
-    echo '\documentclass{article}\usepackage{fontspec}\usepackage[vietnamese]{babel}\usepackage{amsmath,amssymb,amsfonts,amsthm}\usepackage{graphicx}\usepackage{hyperref}\usepackage{geometry}\usepackage{booktabs}\usepackage{xcolor}\begin{document}Prewarm Cache\end{document}' > prewarm.tex && \
-    tectonic prewarm.tex && \
-    rm -rf /tmp/prewarm
-
 # Copy backend dependencies
 WORKDIR /app/server
 COPY server/package*.json ./

@@ -172,17 +172,17 @@ async function runTectonicProcess(projectDir, fullMainPath, baseName, expectedPd
       stderrData += data.toString();
     });
 
-    // 45 seconds timeout safety
+    // 90 seconds timeout safety (provides buffer for initial package downloads on free tiers)
     const timer = setTimeout(() => {
       proc.kill('SIGTERM');
       resolve({
         success: false,
         exitCode: -1,
-        log: stdoutData + '\n' + stderrData + '\n[Quá thời gian] Quá trình biên dịch vượt quá 45 giây.',
+        log: stdoutData + '\n' + stderrData + '\n[Quá thời gian] Quá trình biên dịch vượt quá 90 giây.',
         errors: [{ message: 'Biên dịch quá thời gian quy định (Timeout)', line: null }],
         duration: Date.now() - startTime
       });
-    }, 45000);
+    }, 90000);
 
     proc.on('close', (code) => {
       clearTimeout(timer);
